@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mini Projet certification IOT</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+</head>
+<body>
+
+  <div class="top-background"></div>
+
+  <script>
+    const { createClient } = supabase;
+    const supabaseClient = createClient(
+      "https://aegeqkmhkxqhzlbmkbpu.supabase.co",
+      "YOUR_PUBLIC_ANON_KEY"
+    );
+
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      if (!session) window.location.href = "login.html";
+    });
+
+    async function logout() {
+      await supabaseClient.auth.signOut();
+      window.location.href = "login.html";
+    }
+  </script>
+
+  <header class="site-header">
+    <img src="logo.jpg" alt="Logo ESSECT" class="logo" />
+    <div class="status-top">
+      <div class="sensor-display top-soil">
+        
+        <label class="label">Soil Status:</label>
+        <input type="text" id="soilStatus" readonly />
+      </div>
+      <div class="irrigation-status">
+        <label class="label">Irrigation Status:</label>
+        <input type="text" id="irrigationStatus" readonly />
+      </div>
+    </div>
+    
+  </header>
+
+  <!-- Barre avec titre centré et logout à droite -->
+  <div class="title-bar">
+    <div class="spacer-left"></div>
+    <h1 class="site-title">Smart irrigation for public gardens</h1>
+    <div class="logout-text-top"><a href="#" onclick="logout()">Log out</a></div>
+  </div>
+
+  <div class="separator"></div>
+
+  <div class="control-panel">
+    <div class="sensor-display">
+      <img src="thermo.jfif" alt="Temp Icon" class="sensor-icon" />
+      <label class="label">Temperature:</label>
+      <input type="text" id="tempValue" readonly />
+    </div>
+    <div class="sensor-display">
+      <img src="goutte.jfif" alt="Humidity Icon" class="sensor-icon" />
+      <label class="label">Humidity:</label>
+      <input type="text" id="humidityValue" readonly />
+    </div>
+
+    <button onclick="toggleLED('ON')">System ON</button>
+    <button onclick="toggleLED('OFF')">System OFF</button>
+  </div>
+
+  <div class="separator"></div>
+  <div class="Alert"><p id="alert"></p></div>
+
+  <label id="name-label">Sofiene MIMOUNI</label>
+  <label id="year-label">2024/2025</label>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+ <script>
+  const mqttBroker = "wss://c756e6b8f56b4f0ebfd815daf761150f.s1.eu.hivemq.cloud:8884/mqtt";
+  const mqttUsername = "sofiene";
+  const mqttPassword = "Youssefyassine108";
+  const clientId = "webClient_" + Math.random().toString(16).substr(2, 8);
+  let client;
+
+  function initMqttClient() {
+    client = new Paho.MQTT.Client(mqttBroker, clientId);
+
+    client.onConnectionLost = function (responseObject) {
+      if (responseObject.errorCode !== 0) {
+        console.log("Connexion perdue: " + responseObject.errorMessage);
+      }
+    };
+
+    client.onMessageArrived = function (message) {
+      const payload = message.payloadString;
+      switch (message.destinationName) {
+        case "smart_irrigation/temperature":
+          document.getElementById("tempValue").value = payload + " °C";
+          break;
+        case "smart_irrigation/humidity":
+          document.getElementById("humidityValue").value = payload + " %";
+          break;
+        case "smart_irrigation/soil":
+          document.getElementById("soilStatus").value = payload + " %";
+          break;
+        case "smart_irrigation/relay":
+        case "smart_irrigation/relay_status":
+          document.getElementById("irrigationStatus").value = payload === "ON" ? "Pump ON" : "Pump OFF";
+          break;
+        case "smart_irrigation/ir_alert":
+          document.getElementById("alert").innerText = payload;
+          break;
+      }
+    };
+
+    client.connect({
+      onSuccess: onConnect,
+      userName: mqttUsername,
+      password: mqttPassword,
+      useSSL: true
+    });
+  }
+
+  function onConnect() {
+    console.log("Connecté au broker MQTT");
+    const topics = [
+      "smart_irrigation/temperature",
+      "smart_irrigation/humidity",
+      "smart_irrigation/soil",
+      "smart_irrigation/relay",
+      "smart_irrigation/relay_status",
+      "smart_irrigation/ir_alert"
+    ];
+    topics.forEach(t => client.subscribe(t));
+  }
+
+  function controlDevice(topic, message) {
+    if (client && client.isConnected()) {
+      const mqttMessage = new Paho.MQTT.Message(message);
+      mqttMessage.destinationName = topic;
+      client.send(mqttMessage);
+    }
+  }
+
+  function toggleLED(state) {
+    controlDevice("smart_irrigation/led", state);
+  }
+
+  function toggleRelay(state) {
+    controlDevice("smart_irrigation/relay", state);
+  }
+
+  window.onload = initMqttClient;
+</script>
+</body>
+</html>
